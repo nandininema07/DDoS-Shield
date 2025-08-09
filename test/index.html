@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Origin Server</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <!-- 
+        This is a simple test page to act as the "Origin Server".
+        If your proxy script successfully forwards traffic to this page's IP address,
+        you will see this content in your browser when you navigate to your PROXY_IP.
+    -->
+    <div class="min-h-screen flex items-center justify-center">
+        <div class="max-w-2xl mx-auto text-center p-8 bg-gray-800 rounded-2xl shadow-2xl border border-gray-700">
+            <div class="text-green-400 mb-4">
+                <!-- Checkmark Icon SVG -->
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <h1 class="text-4xl font-bold text-white mb-2">
+                Connection Successful
+            </h1>
+            <p class="text-lg text-gray-400">
+                This is the test origin server. If you are seeing this page, your proxy is working correctly!
+            </p>
+            <div class="mt-6 border-t border-gray-700 pt-4">
+                <p class="text-sm text-gray-500">The proxy successfully forwarded the request to this destination server.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,24 @@
+# Core ML and Data Handling
+pandas
+scikit-learn
+numpy
+kagglehub
+pyarrow
+fastparquet
+
+# Real-time Data Pipeline
+kafka-python
+scapy
+
+# Backend API Framework
+fastapi[all]
+
+#  Database
+SQLAlchemy[asyncio]
+psycopg2-binary
+
+# Notifications & External Services
+twilio
+python-dotenv
+google-generativeai
+requests
