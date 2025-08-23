@@ -5,6 +5,8 @@ numpy
 kagglehub
 pyarrow
 fastparquet
+imbalanced-learn
+seaborn
 
 # Real-time Data Pipeline
 kafka-python
