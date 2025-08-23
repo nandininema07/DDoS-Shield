@@ -59,44 +59,70 @@ The detection engine uses a robust, production-grade machine learning pipeline d
 
 - **Automatic Download:** The CICDDoS2019 dataset is downloaded from Kaggle using the `kagglehub` library.
 - **Multi-Attack Coverage:** Loads data from five different `.parquet` files (DNS, Syn, UDP, NTP, LDAP) to ensure the model learns to recognize a variety of DDoS attack types.
-- **Efficient Sampling:** Randomly samples 15,000 rows from each file and combines them into a single master dataset for fast, memory-efficient training.
+- **Efficient Sampling:** Randomly samples 15,000 rows from each file and combines them into a single master dataset (total 75,000 samples) for fast, memory-efficient training.
 
 ### 2. Data Cleaning and Preprocessing 🧼
 
 - **Column Pruning:** Drops unnecessary columns (identifiers, timestamps) that don’t help the model.
 - **Error Handling:** Removes rows with mathematical errors (infinity, NaN).
-- **Outlier Removal:** Calculates statistical ranges for each feature and removes extreme outliers, but skips this step for features where it would delete too much data.
 - **Label Encoding:** Converts text labels (e.g., "Benign", "DrDoS_DNS") into numeric codes for model compatibility.
 
 ### 3. Feature Selection and Data Splitting 🎯
 
-- **Feature Selection:** Chooses 18 real-time-calculable features known to be strong DDoS indicators.
+- **Feature Selection:** Chooses 9 real-time-calculable features known to be strong DDoS indicators:
+  - Fwd Packet Length Min
+  - Total Fwd Packets
+  - Fwd Packet Length Mean
+  - Fwd Packet Length Std
+  - Fwd Packet Length Max
+  - Flow IAT Std
+  - Flow IAT Mean
+  - Flow Duration
+  - Flow IAT Max
 - **Data Splitting:** Divides the data into:
-  - **Training Set (64%)**: For model learning.
-  - **Validation Set (16%)**: For tuning and overfitting checks.
+  - **Training Set (80%)**: For model learning and balancing.
   - **Test Set (20%)**: For final, unbiased performance evaluation.
 
-### 4. Data Balancing (The Smart Part) ⚖️
+### 4. Data Balancing ⚖️
 
 - **Class Imbalance Detection:** Counts examples per attack type.
-- **Under-sampling:** Reduces over-represented classes.
 - **Over-sampling (SMOTE):** Uses the SMOTE algorithm to synthesize new examples for rare attack types, ensuring balanced learning across all classes.
 
 ### 5. Model Training and Evaluation 🏋️‍♂️
 
-- **Model Choice:** Uses a Random Forest Classifier with carefully chosen hyperparameters to avoid overfitting.
-- **Cross-Validation:** Performs 5-fold cross-validation for a stable, reliable performance estimate.
-- **Final Evaluation:** Reports accuracy and F1-score on the completely unseen test set.
-- **Overfitting Check:** Compares validation and test accuracy to confirm the model generalizes well.
+- **Model Comparison:** Trains and compares six models: Random Forest, Gradient Boosting, SVM, Logistic Regression, K-Nearest Neighbors, and Naive Bayes.
+
+| Model                   | Accuracy (%) | Precision (%) | Recall (%) | F1-Score (%) | ROC-AUC |
+|-------------------------|-------------|--------------|------------|--------------|---------|
+| Gradient Boosting       | 95.37       | 95.61        | 95.37      | 95.34        | 1.00    |
+| Random Forest           | 95.03       | 95.38        | 95.03      | 94.98        | 1.00    |
+| K-Nearest Neighbors     | 94.95       | 95.06        | 94.95      | 94.94        | 0.99    |
+| Support Vector Machine  | 79.81       | 85.03        | 79.81      | 79.90        | 0.98    |
+| Logistic Regression     | 79.48       | 79.62        | 79.48      | 78.63        | 0.97    |
+| Naive Bayes             | 63.77       | 79.22        | 63.77      | 60.82        | 0.95    |
+
+- **Best Model:** Gradient Boosting Classifier achieved the highest performance.
+- **Final Evaluation:** Reports accuracy, precision, recall, F1-score, and ROC-AUC on the test set.
+- **Feature Importance:** Analyzes which features contribute most to detection.
 
 ### 📊 Latest Model Metrics
 
-- **Cross-validation F1:** 0.887
-- **Validation accuracy:** 0.929
-- **Test accuracy:** 0.929
+- **Best Model:** Gradient Boosting Classifier
+- **Test Accuracy:** 95.37%
+- **Test Precision:** 95.61%
+- **Test Recall:** 95.37%
+- **Test F1-Score:** 95.34%
+- **Test ROC-AUC:** 0.996
+
+**Top 5 Most Important Features:**
+1. Fwd Packet Length Min
+2. Total Fwd Packets
+3. Fwd Packet Length Mean
+4. Fwd Packet Length Std
+5. Fwd Packet Length Max
 
 **Result:**  
-The model is balanced, robust, and ready for real-time DDoS detection across multiple attack
+The model is balanced, robust, and ready for real-time DDoS detection across multiple attack types, as demonstrated by the comprehensive model comparison
 
 ---
 

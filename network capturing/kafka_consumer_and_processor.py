@@ -42,7 +42,7 @@ def update_settings():
         time.sleep(30) # Check for new settings every 30 seconds
 
 # --- ML Model Loading ---
-MODEL_PATH = 'ddos_random_forest_model.pkl'
+MODEL_PATH = 'best_ddos_model.pkl'
 SCALER_PATH = 'ddos_scaler.pkl'
 FEATURE_LIST_PATH = 'feature_list.pkl'
 LABEL_ENCODER_PATH = 'label_encoder.pkl'
