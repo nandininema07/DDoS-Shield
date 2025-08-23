@@ -1,9 +1,7 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
-import { Bell, Globe, Mail, Phone, Save, Shield, User } from "lucide-react"
+import React, { useState, useEffect, useCallback } from "react"
+import { Bell, Globe, Mail, Phone, Save, Shield, User, Info } from "lucide-react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,58 +10,86 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { useToast } from "@/components/ui/use-toast"
+
+const API_BASE_URL = "http://127.0.0.1:8001";
 
 export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false)
-  const { toast } = useToast()
+  
+  const [profile, setProfile] = useState({ name: "", email: "", phone: "" })
+  const [website, setWebsite] = useState({ url: "" })
+  const [alerts, setAlerts] = useState({ emailAlerts: true, phoneAlerts: false })
+  const [advanced, setAdvanced] = useState({ ddosThreshold: 50 })
+  const [resolvedIp, setResolvedIp] = useState("N/A")
 
-  // Profile settings
-  const [profile, setProfile] = useState({
-    name: "John Doe",
-    email: "john.doe@example.com",
-    phone: "+1 (555) 000-0000",
-  })
+  const fetchSettings = useCallback(async () => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/settings`);
+        if (!response.ok) {
+            // If no user is found, the API returns 404. This is expected before signup.
+            if (response.status === 404) {
+                console.log("No user settings found. Please sign up or log in.");
+                return;
+            }
+            throw new Error("Failed to fetch settings");
+        }
+        const data = await response.json();
+        setProfile(data.profile);
+        setWebsite(data.website);
+        setAlerts(data.alerts);
+        setAdvanced(data.advanced);
+        
+        if (data.website.url) {
+            const ipResponse = await fetch(`${API_BASE_URL}/api/get-ip`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: data.website.url }),
+            });
+            const ipData = await ipResponse.json();
+            setResolvedIp(ipData.ip_address);
+        }
+    } catch (error) {
+        console.error("Failed to fetch settings:", error);
+    }
+  }, []);
 
-  // Website settings
-  const [website, setWebsite] = useState({
-    url: "https://example.com",
-  })
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings]);
 
-  // Alert settings
-  const [alerts, setAlerts] = useState({
-    emailAlerts: true,
-    phoneAlerts: false,
-    attackNotifications: true,
-    systemUpdates: true,
-    weeklyReports: true,
-  })
-
-  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setProfile((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleWebsiteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setWebsite((prev) => ({ ...prev, [name]: value }))
-  }
+  // --- FIX: A single, generic handler for all input changes ---
+  const handleInputChange = (setter) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setter((prev) => ({ ...prev, [name]: value }));
+  };
 
   const handleAlertsChange = (name: string, checked: boolean) => {
     setAlerts((prev) => ({ ...prev, [name]: checked }))
   }
 
-  const handleSaveSettings = (section: string) => {
+  const handleSaveSettings = async (section: string) => {
     setIsLoading(true)
+    let payload = {};
+    if (section === 'profile') {
+        payload = { username: profile.name, email: profile.email, phone_number: profile.phone };
+    } else if (section === 'website') {
+        payload = { website_url: website.url, ddos_threshold: parseInt(advanced.ddosThreshold, 10) };
+    } else if (section === 'alerts') {
+        payload = { email_alerts: alerts.emailAlerts, phone_alerts: alerts.phoneAlerts };
+    }
 
-    // Simulate saving settings
-    setTimeout(() => {
-      setIsLoading(false)
-      toast({
-        title: "Settings saved",
-        description: `Your ${section} settings have been updated successfully.`,
-      })
-    }, 1000)
+    try {
+        await fetch(`${API_BASE_URL}/api/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        await fetchSettings();
+    } catch (error) {
+        console.error(`Failed to save ${section} settings:`, error);
+    } finally {
+        setIsLoading(false);
+    }
   }
 
   return (
@@ -90,52 +116,27 @@ export default function SettingsPage() {
               <CardDescription>Manage your personal information and contact details</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex flex-col items-center justify-center gap-4 sm:flex-row sm:justify-start">
-                <Avatar className="h-20 w-20">
-                  <AvatarImage src="/placeholder.svg?height=80&width=80" alt="User" />
-                  <AvatarFallback>JD</AvatarFallback>
-                </Avatar>
-                <div>
-                  <h3 className="text-lg font-medium">{profile.name}</h3>
-                  <p className="text-sm text-muted-foreground">{profile.email}</p>
-                  <Button variant="outline" size="sm" className="mt-2">
-                    Change Avatar
-                  </Button>
-                </div>
-              </div>
-
-              <Separator />
-
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="name">Full Name</Label>
-                  <Input id="name" name="name" value={profile.name} onChange={handleProfileChange} />
+                  {/* --- FIX: Use the correct handler function --- */}
+                  <Input id="name" name="name" value={profile.name} onChange={handleInputChange(setProfile)} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email Address</Label>
-                  <Input id="email" name="email" type="email" value={profile.email} onChange={handleProfileChange} />
+                  {/* --- FIX: Use the correct handler function --- */}
+                  <Input id="email" name="email" type="email" value={profile.email} onChange={handleInputChange(setProfile)} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number</Label>
-                  <Input id="phone" name="phone" type="tel" value={profile.phone} onChange={handleProfileChange} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input id="password" name="password" type="password" placeholder="••••••••" />
-                  <p className="text-xs text-muted-foreground">Leave blank to keep current password</p>
+                  {/* --- FIX: Use the correct handler function --- */}
+                  <Input id="phone" name="phone" type="tel" value={profile.phone} onChange={handleInputChange(setProfile)} />
                 </div>
               </div>
             </CardContent>
             <CardFooter className="flex justify-end">
               <Button onClick={() => handleSaveSettings("profile")} disabled={isLoading}>
-                {isLoading ? (
-                  "Saving..."
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Changes
-                  </>
-                )}
+                {isLoading ? "Saving..." : <><Save className="mr-2 h-4 w-4" />Save Changes</>}
               </Button>
             </CardFooter>
           </Card>
@@ -157,49 +158,37 @@ export default function SettingsPage() {
                   id="url"
                   name="url"
                   value={website.url}
-                  onChange={handleWebsiteChange}
+                  onChange={handleInputChange(setWebsite)}
                   placeholder="https://example.com"
                 />
-                <p className="text-xs text-muted-foreground">Enter the primary domain you want to protect</p>
+                 <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Info className="h-3 w-3" />
+                    Resolved Origin Server IP: <span className="font-mono">{resolvedIp}</span>
+                </p>
               </div>
-
               <Separator />
-
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Advanced Settings</h3>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="threshold">DDoS Detection Threshold</Label>
-                    <Input id="threshold" type="number" defaultValue="4000" />
-                    <p className="text-xs text-muted-foreground">Requests per minute</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="sensitivity">ML Model Sensitivity</Label>
-                    <Input id="sensitivity" type="range" min="1" max="10" defaultValue="7" className="cursor-pointer" />
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Low</span>
-                      <span>Medium</span>
-                      <span>High</span>
-                    </div>
-                  </div>
-                </div>
+              <div className="space-y-2">
+                 <Label htmlFor="ddosThreshold">DDoS Detection Threshold</Label>
+                 <Input 
+                    id="ddosThreshold" 
+                    name="ddosThreshold" 
+                    type="number" 
+                    value={advanced.ddosThreshold}
+                    onChange={handleInputChange(setAdvanced)}
+                 />
+                 <p className="text-xs text-muted-foreground">
+                    Number of malicious flows from a single IP within the time window to trigger an alert.
+                 </p>
               </div>
             </CardContent>
             <CardFooter className="flex justify-end">
               <Button onClick={() => handleSaveSettings("website")} disabled={isLoading}>
-                {isLoading ? (
-                  "Saving..."
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Changes
-                  </>
-                )}
+                {isLoading ? "Saving..." : <><Save className="mr-2 h-4 w-4" />Save Changes</>}
               </Button>
             </CardFooter>
           </Card>
         </TabsContent>
-
+        
         <TabsContent value="alerts" className="space-y-4">
           <Card>
             <CardHeader>
@@ -207,98 +196,21 @@ export default function SettingsPage() {
                 <Bell className="h-5 w-5 text-primary" />
                 Alert Settings
               </CardTitle>
-              <CardDescription>Configure how and when you receive notifications</CardDescription>
+              <CardDescription>Configure how you receive notifications</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Notification Methods</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <Label htmlFor="emailAlerts" className="cursor-pointer">
-                        Email Alerts
-                      </Label>
-                    </div>
-                    <Switch
-                      id="emailAlerts"
-                      checked={alerts.emailAlerts}
-                      onCheckedChange={(checked) => handleAlertsChange("emailAlerts", checked)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <Label htmlFor="phoneAlerts" className="cursor-pointer">
-                        Phone Alerts (SMS/Call)
-                      </Label>
-                    </div>
-                    <Switch
-                      id="phoneAlerts"
-                      checked={alerts.phoneAlerts}
-                      onCheckedChange={(checked) => handleAlertsChange("phoneAlerts", checked)}
-                    />
-                  </div>
-                </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="emailAlerts">Email Alerts</Label>
+                <Switch id="emailAlerts" checked={alerts.emailAlerts} onCheckedChange={(c) => handleAlertsChange("emailAlerts", c)} />
               </div>
-
-              <Separator />
-
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Alert Types</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Shield className="h-4 w-4 text-muted-foreground" />
-                      <Label htmlFor="attackNotifications" className="cursor-pointer">
-                        Attack Notifications
-                      </Label>
-                    </div>
-                    <Switch
-                      id="attackNotifications"
-                      checked={alerts.attackNotifications}
-                      onCheckedChange={(checked) => handleAlertsChange("attackNotifications", checked)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Bell className="h-4 w-4 text-muted-foreground" />
-                      <Label htmlFor="systemUpdates" className="cursor-pointer">
-                        System Updates
-                      </Label>
-                    </div>
-                    <Switch
-                      id="systemUpdates"
-                      checked={alerts.systemUpdates}
-                      onCheckedChange={(checked) => handleAlertsChange("systemUpdates", checked)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <Label htmlFor="weeklyReports" className="cursor-pointer">
-                        Weekly Summary Reports
-                      </Label>
-                    </div>
-                    <Switch
-                      id="weeklyReports"
-                      checked={alerts.weeklyReports}
-                      onCheckedChange={(checked) => handleAlertsChange("weeklyReports", checked)}
-                    />
-                  </div>
-                </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="phoneAlerts">Phone Alerts</Label>
+                <Switch id="phoneAlerts" checked={alerts.phoneAlerts} onCheckedChange={(c) => handleAlertsChange("phoneAlerts", c)} />
               </div>
             </CardContent>
             <CardFooter className="flex justify-end">
               <Button onClick={() => handleSaveSettings("alerts")} disabled={isLoading}>
-                {isLoading ? (
-                  "Saving..."
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Changes
-                  </>
-                )}
+                {isLoading ? "Saving..." : <><Save className="mr-2 h-4 w-4" />Save Changes</>}
               </Button>
             </CardFooter>
           </Card>

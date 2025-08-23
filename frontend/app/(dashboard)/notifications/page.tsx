@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Bell, Mail, Phone, Search, Shield, ShieldAlert } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -9,115 +9,68 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
-// Sample notifications data
-const notificationsData = [
-  {
-    id: 1,
-    title: "DDoS Attack Blocked",
-    description: "High volume of traffic from multiple IPs detected and blocked.",
-    time: "10 minutes ago",
-    type: "blocked",
-    ipAddress: "192.168.1.45",
-    emailSent: true,
-    callMade: true,
-    callStatus: "success",
-  },
-  {
-    id: 2,
-    title: "IP Address Blocked",
-    description: "IP 203.45.67.89 has been automatically blocked due to suspicious activity.",
-    time: "25 minutes ago",
-    type: "blocked",
-    ipAddress: "203.45.67.89",
-    emailSent: true,
-    callMade: true,
-    callStatus: "failed",
-  },
-  {
-    id: 3,
-    title: "System Update",
-    description: "ML model has been updated to the latest version.",
-    time: "1 hour ago",
-    type: "system",
-    ipAddress: null,
-    emailSent: false,
-    callMade: false,
-    callStatus: null,
-  },
-  {
-    id: 4,
-    title: "New IP Flagged",
-    description: "IP 78.90.12.34 has been flagged for monitoring.",
-    time: "2 hours ago",
-    type: "flagged",
-    ipAddress: "78.90.12.34",
-    emailSent: true,
-    callMade: false,
-    callStatus: null,
-  },
-  {
-    id: 5,
-    title: "Traffic Spike Detected",
-    description: "Unusual traffic spike detected but determined to be legitimate traffic.",
-    time: "3 hours ago",
-    type: "alert",
-    ipAddress: null,
-    emailSent: true,
-    callMade: false,
-    callStatus: null,
-  },
-  {
-    id: 6,
-    title: "IP Address Blocked",
-    description: "IP 112.34.56.78 has been automatically blocked due to DNS Amplification attack.",
-    time: "5 hours ago",
-    type: "blocked",
-    ipAddress: "112.34.56.78",
-    emailSent: true,
-    callMade: true,
-    callStatus: "success",
-  },
-  {
-    id: 7,
-    title: "New IP Flagged",
-    description: "IP 45.67.123.45 has been flagged for monitoring.",
-    time: "8 hours ago",
-    type: "flagged",
-    ipAddress: "45.67.123.45",
-    emailSent: true,
-    callMade: false,
-    callStatus: null,
-  },
-  {
-    id: 8,
-    title: "System Maintenance",
-    description: "Scheduled system maintenance completed successfully.",
-    time: "12 hours ago",
-    type: "system",
-    ipAddress: null,
-    emailSent: false,
-    callMade: false,
-    callStatus: null,
-  },
-]
+const API_BASE_URL = "http://127.0.0.1:8000"
+
+// Helper function to format timestamps
+const formatTimeAgo = (dateString) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const seconds = Math.round((now - date) / 1000);
+  if (seconds < 60) return `${seconds} seconds ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} minutes ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} hours ago`;
+  const days = Math.round(hours / 24);
+  return `${days} days ago`;
+};
 
 export default function NotificationsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
+  
+  // --- State for API data ---
+  const [notificationsData, setNotificationsData] = useState([])
+  const [filteredNotifications, setFilteredNotifications] = useState([])
 
-  const filteredNotifications = notificationsData.filter((notification) => {
-    const matchesSearch =
-      notification.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      notification.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (notification.ipAddress && notification.ipAddress.includes(searchQuery))
+  // --- Fetch data from the backend ---
+  const fetchNotifications = useCallback(async () => {
+    try {
+      // --- CHANGE HERE: Updated to the correct endpoint ---
+      const response = await fetch(`${API_BASE_URL}/api/attack-logs`);
+      const data = await response.json();
+      setNotificationsData(data);
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+    }
+  }, []);
 
-    if (activeTab === "all") return matchesSearch
-    if (activeTab === "blocked") return matchesSearch && notification.type === "blocked"
-    if (activeTab === "flagged") return matchesSearch && notification.type === "flagged"
-    if (activeTab === "call-failed") return matchesSearch && notification.callStatus === "failed"
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 15000); // Auto-refresh
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
 
-    return matchesSearch
-  })
+  // --- Client-side filtering logic ---
+  useEffect(() => {
+    let data = notificationsData;
+
+    if (searchQuery) {
+        data = data.filter(notification =>
+            notification.source_ip.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            notification.details.type?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }
+
+    if (activeTab === "blocked") {
+        data = data.filter(n => n.details.type); // Filter for actual attacks
+    } else if (activeTab === "call-failed") {
+        data = data.filter(n => n.call_status === "failed");
+    }
+    // "Flagged" is a conceptual status not yet implemented in the backend data
+    
+    setFilteredNotifications(data);
+  }, [searchQuery, activeTab, notificationsData]);
 
   return (
     <div className="space-y-6">
@@ -140,7 +93,7 @@ export default function NotificationsPage() {
               <TabsList>
                 <TabsTrigger value="all">All</TabsTrigger>
                 <TabsTrigger value="blocked">Blocked</TabsTrigger>
-                <TabsTrigger value="flagged">Flagged</TabsTrigger>
+                <TabsTrigger value="flagged" disabled>Flagged</TabsTrigger>
                 <TabsTrigger value="call-failed">Call Failed</TabsTrigger>
               </TabsList>
             </Tabs>
@@ -148,7 +101,7 @@ export default function NotificationsPage() {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Search notifications..."
+                placeholder="Search by IP or Attack Type..."
                 className="w-full pl-9 sm:w-[250px]"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -163,48 +116,37 @@ export default function NotificationsPage() {
                   <div key={notification.id} className="space-y-2">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-2">
-                        {notification.type === "blocked" && <ShieldAlert className="h-5 w-5 text-destructive" />}
-                        {notification.type === "flagged" && <Shield className="h-5 w-5 text-amber-500" />}
-                        {notification.type === "system" && <Bell className="h-5 w-5 text-primary" />}
-                        {notification.type === "alert" && <Bell className="h-5 w-5 text-amber-500" />}
-                        <h3 className="font-medium">{notification.title}</h3>
+                        <ShieldAlert className="h-5 w-5 text-destructive" />
+                        <h3 className="font-medium">Attack Detected: {notification.details.type}</h3>
                       </div>
-                      <span className="text-xs text-muted-foreground">{notification.time}</span>
+                      <span className="text-xs text-muted-foreground">{formatTimeAgo(notification.timestamp)}</span>
                     </div>
-                    <p className="text-sm text-muted-foreground">{notification.description}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Confirmed attack from IP address {notification.source_ip}. The IP has been blacklisted.
+                    </p>
                     <div className="flex flex-wrap gap-2">
-                      {notification.ipAddress && (
-                        <Badge variant="outline" className="font-mono">
-                          IP: {notification.ipAddress}
-                        </Badge>
-                      )}
-                      {notification.emailSent && (
-                        <Badge variant="outline" className="bg-primary/10">
+                      <Badge variant="outline" className="font-mono">
+                        IP: {notification.source_ip}
+                      </Badge>
+                      {notification.email_status !== 'pending' && (
+                        <Badge variant="outline" className={notification.email_status === "success" ? "bg-primary/10" : "bg-destructive/10"}>
                           <Mail className="mr-1 h-3 w-3" />
-                          Email Sent
+                          Email {notification.email_status}
                         </Badge>
                       )}
-                      {notification.callMade && (
+                      {notification.call_status !== 'pending' && (
                         <Badge
                           variant="outline"
-                          className={notification.callStatus === "success" ? "bg-green-500/10" : "bg-destructive/10"}
+                          className={notification.call_status === "success" ? "bg-green-500/10" : "bg-destructive/10"}
                         >
                           <Phone className="mr-1 h-3 w-3" />
-                          Call {notification.callStatus === "success" ? "Successful" : "Failed"}
+                          Call {notification.call_status}
                         </Badge>
                       )}
-                      {notification.type === "blocked" && (
-                        <Badge variant="destructive">
-                          <ShieldAlert className="mr-1 h-3 w-3" />
-                          Blocked
-                        </Badge>
-                      )}
-                      {notification.type === "flagged" && (
-                        <Badge>
-                          <Shield className="mr-1 h-3 w-3" />
-                          Flagged
-                        </Badge>
-                      )}
+                       <Badge variant="destructive">
+                         <ShieldAlert className="mr-1 h-3 w-3" />
+                         Blocked
+                       </Badge>
                     </div>
                     <Separator className="mt-4" />
                   </div>

@@ -5,15 +5,43 @@ from kafka.errors import NoBrokersAvailable
 import json
 import time
 from scapy.all import sniff, IP, TCP
+import requests
+from urllib.parse import urlparse
 
 # --- Configuration ---
-PROXY_IP = "0.0.0.0"  # Listen on all available interfaces
-PROXY_PORT = 80       # Port to listen on (e.g., 80 for HTTP)
-ORIGIN_SERVER_IP = "52.74.6.109" # The IP for your Netlify test site
+PROXY_IP = "0.0.0.0"
+PROXY_PORT = 80
+INTERFACE = "\\Device\\NPF_{5DF8F02E-33C1-48D0-A743-9CD1FEEBAAD4}"
+KAFKA_BROKER = 'localhost:9092'
+KAFKA_TOPIC = 'network_traffic'
+SETTINGS_API_URL = "http://127.0.0.1:8001/api/settings"
+GET_IP_API_URL = "http://127.0.0.1:8001/api/get-ip"
+
+# --- Dynamic Origin Server IP ---
+ORIGIN_SERVER_IP = None
 ORIGIN_SERVER_PORT = 80
 
-# The network interface to sniff on for Kafka logging.
-INTERFACE = "\\Device\\NPF_{5DF8F02E-33C1-48D0-A743-9CD1FEEBAAD4}"
+def update_origin_server_ip():
+    global ORIGIN_SERVER_IP
+    while True:
+        try:
+            response = requests.get(SETTINGS_API_URL)
+            response.raise_for_status()
+            settings = response.json()
+            website_url = settings['website']['url']
+            
+            ip_response = requests.post(GET_IP_API_URL, json={"url": website_url})
+            ip_response.raise_for_status()
+            ip_data = ip_response.json()
+            
+            if ORIGIN_SERVER_IP != ip_data['ip_address']:
+                ORIGIN_SERVER_IP = ip_data['ip_address']
+                print(f"✅ Updated origin server IP to: {ORIGIN_SERVER_IP} for URL: {website_url}")
+
+        except requests.exceptions.RequestException as e:
+            print(f"⚠️ Could not update origin server IP. Using last known IP. Error: {e}")
+        
+        time.sleep(60) # Check for updates every 60 seconds
 
 # Kafka configuration
 KAFKA_BROKER = 'localhost:9092'
@@ -122,20 +150,21 @@ def start_proxy_server():
 
 # --- Main Execution ---
 if __name__ == "__main__":
+    # Start the thread to keep the origin server IP updated
+    ip_updater_thread = threading.Thread(target=update_origin_server_ip, daemon=True)
+    ip_updater_thread.start()
+
+    # Wait for the first IP update before starting the server
+    print("Waiting for initial origin server IP configuration...")
+    while ORIGIN_SERVER_IP is None:
+        time.sleep(1)
+
     try:
-        # Start the Scapy sniffer in the background
         sniffer_thread = threading.Thread(target=start_kafka_sniffer, daemon=True)
         sniffer_thread.start()
-
-        # Start the proxy server in the main thread
         start_proxy_server()
-
     except KeyboardInterrupt:
         print("\nShutting down proxy server.")
-    except Exception as e:
-        print(f"\nA fatal error occurred: {e}")
     finally:
         if producer:
-            producer.flush()
             producer.close()
-            print("Kafka producer closed.")

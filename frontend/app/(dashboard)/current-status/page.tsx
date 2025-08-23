@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { AlertCircle, Check, Info, Search, ShieldAlert } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -11,130 +11,66 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts"
 
-// Sample data for the live chart
-const liveData = [
-  { time: "00:00", traffic: 2100, threshold: 4000 },
-  { time: "02:00", traffic: 1800, threshold: 4000 },
-  { time: "04:00", traffic: 1500, threshold: 4000 },
-  { time: "06:00", traffic: 2000, threshold: 4000 },
-  { time: "08:00", traffic: 3500, threshold: 4000 },
-  { time: "10:00", traffic: 5200, threshold: 4000 },
-  { time: "12:00", traffic: 4000, threshold: 4000 },
-  { time: "14:00", traffic: 3800, threshold: 4000 },
-  { time: "16:00", traffic: 3500, threshold: 4000 },
-  { time: "18:00", traffic: 4800, threshold: 4000 },
-  { time: "20:00", traffic: 4200, threshold: 4000 },
-  { time: "22:00", traffic: 3000, threshold: 4000 },
-  { time: "23:59", traffic: 2800, threshold: 4000 },
-]
-
-// Sample data for the log table
-const logData = [
-  {
-    id: 1,
-    ipAddress: "192.168.1.45",
-    date: "2023-04-09",
-    time: "10:23:45",
-    status: "DDoS Detected",
-    details: {
-      confidence: 0.95,
-      packetRate: "12,500/sec",
-      trafficVolume: "1.2 GB/min",
-      attackType: "SYN Flood",
-      sourceCountry: "Unknown",
-      actionTaken: "Blocked",
-    },
-  },
-  {
-    id: 2,
-    ipAddress: "203.45.67.89",
-    date: "2023-04-09",
-    time: "09:15:30",
-    status: "Flagged",
-    details: {
-      confidence: 0.75,
-      packetRate: "8,200/sec",
-      trafficVolume: "750 MB/min",
-      attackType: "HTTP Flood",
-      sourceCountry: "Russia",
-      actionTaken: "Monitoring",
-    },
-  },
-  {
-    id: 3,
-    ipAddress: "45.67.89.123",
-    date: "2023-04-09",
-    time: "08:45:12",
-    status: "Safe",
-    details: {
-      confidence: 0.15,
-      packetRate: "1,200/sec",
-      trafficVolume: "120 MB/min",
-      attackType: "N/A",
-      sourceCountry: "United States",
-      actionTaken: "None",
-    },
-  },
-  {
-    id: 4,
-    ipAddress: "78.90.12.34",
-    date: "2023-04-09",
-    time: "07:30:55",
-    status: "DDoS Detected",
-    details: {
-      confidence: 0.92,
-      packetRate: "15,800/sec",
-      trafficVolume: "1.8 GB/min",
-      attackType: "UDP Flood",
-      sourceCountry: "China",
-      actionTaken: "Blocked",
-    },
-  },
-  {
-    id: 5,
-    ipAddress: "112.34.56.78",
-    date: "2023-04-09",
-    time: "06:20:10",
-    status: "Flagged",
-    details: {
-      confidence: 0.68,
-      packetRate: "5,600/sec",
-      trafficVolume: "480 MB/min",
-      attackType: "DNS Amplification",
-      sourceCountry: "Brazil",
-      actionTaken: "Monitoring",
-    },
-  },
-  {
-    id: 6,
-    ipAddress: "89.123.45.67",
-    date: "2023-04-09",
-    time: "05:10:30",
-    status: "Safe",
-    details: {
-      confidence: 0.08,
-      packetRate: "950/sec",
-      trafficVolume: "85 MB/min",
-      attackType: "N/A",
-      sourceCountry: "Germany",
-      actionTaken: "None",
-    },
-  },
-]
+const API_BASE_URL = "http://127.0.0.1:8000"
 
 export default function CurrentStatusPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [selectedLog, setSelectedLog] = useState<(typeof logData)[0] | null>(null)
+  
+  // --- State for API data ---
+  const [liveData, setLiveData] = useState([])
+  const [logData, setLogData] = useState([])
+  const [filteredLogs, setFilteredLogs] = useState([])
+
+  const [selectedLog, setSelectedLog] = useState(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
-  const filteredLogs = logData.filter((log) => {
-    const matchesSearch = log.ipAddress.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === "all" || log.status.toLowerCase() === statusFilter.toLowerCase()
-    return matchesSearch && matchesStatus
-  })
+  // --- Fetch data from the backend ---
+  const fetchData = useCallback(async () => {
+    try {
+      const [liveRes, logRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/live-activity-chart`),
+        fetch(`${API_BASE_URL}/api/traffic-log`) // Fetch all logs initially
+      ]);
+      const liveData = await liveRes.json();
+      const logData = await logRes.json();
+      
+      setLiveData(liveData);
+      setLogData(logData);
+      setFilteredLogs(logData); // Initially, show all logs
+    } catch (error) {
+      console.error("Failed to fetch current status data:", error);
+    }
+  }, []);
 
-  const handleViewDetails = (log: (typeof logData)[0]) => {
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 30000); // Auto-refresh every 30 seconds
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  // --- Client-side filtering logic ---
+  useEffect(() => {
+    let logs = logData;
+
+    if (searchQuery) {
+      logs = logs.filter(log => log.source_ip.toLowerCase().includes(searchQuery.toLowerCase()));
+    }
+
+    if (statusFilter !== "all") {
+      // Since we only have "DDoS Detected" logs, this simplifies the filter.
+      if (statusFilter === "ddos detected") {
+        logs = logs.filter(log => log.details.type); // Check if it's an attack log
+      } else {
+        logs = []; // No logs for "Safe" or "Flagged" yet
+      }
+    }
+    
+    setFilteredLogs(logs);
+  }, [searchQuery, statusFilter, logData]);
+
+
+  const handleViewDetails = (log) => {
     setSelectedLog(log)
     setIsDialogOpen(true)
   }
@@ -149,20 +85,12 @@ export default function CurrentStatusPage() {
       <Card>
         <CardHeader>
           <CardTitle>Live Network Activity</CardTitle>
-          <CardDescription>Current traffic patterns with DDoS threshold indicator</CardDescription>
+          <CardDescription>Detected malicious traffic rate over the last hour</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={liveData}
-                margin={{
-                  top: 5,
-                  right: 30,
-                  left: 20,
-                  bottom: 5,
-                }}
-              >
+              <LineChart data={liveData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="time" />
                 <YAxis />
@@ -172,7 +100,7 @@ export default function CurrentStatusPage() {
                   type="monotone"
                   dataKey="traffic"
                   stroke="#8884d8"
-                  name="Current Traffic (requests/min)"
+                  name="Detected Attack Traffic"
                   strokeWidth={2}
                 />
                 <Line
@@ -180,7 +108,7 @@ export default function CurrentStatusPage() {
                   dataKey="threshold"
                   stroke="#ff0000"
                   strokeDasharray="5 5"
-                  name="DDoS Threshold"
+                  name="Alert Threshold"
                   strokeWidth={2}
                 />
               </LineChart>
@@ -210,8 +138,8 @@ export default function CurrentStatusPage() {
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="ddos detected">DDoS Detected</SelectItem>
-                <SelectItem value="flagged">Flagged</SelectItem>
-                <SelectItem value="safe">Safe</SelectItem>
+                <SelectItem value="flagged">Flagged (Not Implemented)</SelectItem>
+                <SelectItem value="safe">Safe (Not Implemented)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -232,23 +160,13 @@ export default function CurrentStatusPage() {
               {filteredLogs.length > 0 ? (
                 filteredLogs.map((log) => (
                   <TableRow key={log.id}>
-                    <TableCell className="font-mono">{log.ipAddress}</TableCell>
-                    <TableCell>{log.date}</TableCell>
-                    <TableCell>{log.time}</TableCell>
+                    <TableCell className="font-mono">{log.source_ip}</TableCell>
+                    <TableCell>{new Date(log.timestamp).toLocaleDateString()}</TableCell>
+                    <TableCell>{new Date(log.timestamp).toLocaleTimeString()}</TableCell>
                     <TableCell>
-                      <Badge
-                        variant={
-                          log.status === "DDoS Detected"
-                            ? "destructive"
-                            : log.status === "Flagged"
-                              ? "default"
-                              : "outline"
-                        }
-                      >
-                        {log.status === "DDoS Detected" && <ShieldAlert className="mr-1 h-3 w-3" />}
-                        {log.status === "Flagged" && <AlertCircle className="mr-1 h-3 w-3" />}
-                        {log.status === "Safe" && <Check className="mr-1 h-3 w-3" />}
-                        {log.status}
+                      <Badge variant="destructive">
+                        <ShieldAlert className="mr-1 h-3 w-3" />
+                        DDoS Detected
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -275,54 +193,31 @@ export default function CurrentStatusPage() {
         {selectedLog && (
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>IP Details: {selectedLog.ipAddress}</DialogTitle>
+              <DialogTitle>IP Details: {selectedLog.source_ip}</DialogTitle>
               <DialogDescription>Detailed information about this traffic log</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="flex justify-between rounded-lg bg-muted p-3">
                 <div className="font-medium">Status</div>
-                <Badge
-                  variant={
-                    selectedLog.status === "DDoS Detected"
-                      ? "destructive"
-                      : selectedLog.status === "Flagged"
-                        ? "default"
-                        : "outline"
-                  }
-                >
-                  {selectedLog.status}
-                </Badge>
+                <Badge variant="destructive">DDoS Detected</Badge>
               </div>
-
               <div className="space-y-2">
                 <div className="text-sm font-medium">ML Model Analysis</div>
                 <div className="grid grid-cols-2 gap-2 rounded-lg border p-3">
-                  <div className="text-sm text-muted-foreground">Confidence</div>
-                  <div className="text-sm font-medium text-right">
-                    {(selectedLog.details.confidence * 100).toFixed(1)}%
-                  </div>
-                  <div className="text-sm text-muted-foreground">Packet Rate</div>
-                  <div className="text-sm font-medium text-right">{selectedLog.details.packetRate}</div>
-                  <div className="text-sm text-muted-foreground">Traffic Volume</div>
-                  <div className="text-sm font-medium text-right">{selectedLog.details.trafficVolume}</div>
                   <div className="text-sm text-muted-foreground">Attack Type</div>
-                  <div className="text-sm font-medium text-right">{selectedLog.details.attackType}</div>
-                  <div className="text-sm text-muted-foreground">Source Country</div>
-                  <div className="text-sm font-medium text-right">{selectedLog.details.sourceCountry}</div>
+                  <div className="text-sm font-medium text-right">{selectedLog.details.type || 'N/A'}</div>
+                  <div className="text-sm text-muted-foreground">Total Packets</div>
+                  <div className="text-sm font-medium text-right">{selectedLog.details.total_packets || 'N/A'}</div>
+                  <div className="text-sm text-muted-foreground">Total Bytes</div>
+                  <div className="text-sm font-medium text-right">{selectedLog.details.total_bytes || 'N/A'}</div>
+                  <div className="text-sm text-muted-foreground">Flow Duration (s)</div>
+                  <div className="text-sm font-medium text-right">{selectedLog.details.flow_duration?.toFixed(4) || 'N/A'}</div>
                   <div className="text-sm text-muted-foreground">Action Taken</div>
-                  <div className="text-sm font-medium text-right">{selectedLog.details.actionTaken}</div>
+                  <div className="text-sm font-medium text-right">Blocked</div>
                 </div>
               </div>
-
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Close
-                </Button>
-                {selectedLog.status !== "Safe" && (
-                  <Button variant="default">
-                    {selectedLog.status === "DDoS Detected" ? "Unblock IP" : "Mark as Safe"}
-                  </Button>
-                )}
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Close</Button>
               </div>
             </div>
           </DialogContent>

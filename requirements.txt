@@ -12,10 +12,16 @@ scapy
 
 # Backend API Framework
 fastapi[all]
+uvicorn
 
-#  Database
+# Database
 SQLAlchemy[asyncio]
 psycopg2-binary
+
+# Authentication & Security
+python-jose[cryptography]
+passlib[bcrypt]
+python-jwt
 
 # Notifications & External Services
 twilio

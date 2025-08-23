@@ -1,36 +1,51 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
+import React, { useState } from "react"
 import { Eye, EyeOff, Lock, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useToast } from "@/components/ui/use-toast"
+
+const API_BASE_URL = "http://127.0.0.1:8001";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
-  const { toast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
 
-    // Simulate login
-    setTimeout(() => {
-      setIsLoading(false)
-      toast({
-        title: "Login successful",
-        description: "Welcome back to the DDoS Detection System",
-      })
-      router.push("/dashboard")
-    }, 1500)
+    const formData = new FormData(e.currentTarget);
+    const data = Object.fromEntries(formData.entries());
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: data.email,
+                password: data.password
+            }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "Login failed");
+        }
+
+        const { access_token } = await response.json();
+        // Store the token (e.g., in localStorage) for future requests
+        localStorage.setItem('accessToken', access_token);
+        
+        window.location.href = "/dashboard";
+
+    } catch (error) {
+        console.error("Login error:", error);
+    } finally {
+        setIsLoading(false);
+    }
   }
 
   return (
@@ -46,20 +61,21 @@ export default function LoginPage() {
               <Label htmlFor="email">Email</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input id="email" type="email" placeholder="name@example.com" className="pl-10" required />
+                <Input id="email" name="email" type="email" placeholder="name@example.com" className="pl-10" required />
               </div>
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <Link href="/forgot-password" className="text-xs text-primary hover:underline">
+                <a href="/forgot-password" className="text-xs text-primary hover:underline">
                   Forgot Password?
-                </Link>
+                </a>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="password"
+                  name="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   className="pl-10 pr-10"
@@ -73,7 +89,6 @@ export default function LoginPage() {
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  <span className="sr-only">{showPassword ? "Hide password" : "Show password"}</span>
                 </Button>
               </div>
             </div>
@@ -84,9 +99,9 @@ export default function LoginPage() {
             </Button>
             <p className="mt-4 text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{" "}
-              <Link href="/signup" className="text-primary hover:underline">
+              <a href="/signup" className="text-primary hover:underline">
                 Sign up
-              </Link>
+              </a>
             </p>
           </CardFooter>
         </form>

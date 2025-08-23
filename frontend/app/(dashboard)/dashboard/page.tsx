@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { AlertCircle, Clock, RefreshCw, Shield, ShieldAlert, ShieldCheck } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -21,67 +21,97 @@ import {
   Legend,
 } from "recharts"
 
-// Sample data for charts
-const trafficData = [
-  { time: "00:00", traffic: 2100, attacks: 0 },
-  { time: "02:00", traffic: 1800, attacks: 0 },
-  { time: "04:00", traffic: 1500, attacks: 0 },
-  { time: "06:00", traffic: 2000, attacks: 0 },
-  { time: "08:00", traffic: 3500, attacks: 0 },
-  { time: "10:00", traffic: 5200, attacks: 150 },
-  { time: "12:00", traffic: 6000, attacks: 320 },
-  { time: "14:00", traffic: 5800, attacks: 80 },
-  { time: "16:00", traffic: 5500, attacks: 0 },
-  { time: "18:00", traffic: 4800, attacks: 0 },
-  { time: "20:00", traffic: 4200, attacks: 200 },
-  { time: "22:00", traffic: 3000, attacks: 0 },
-]
+// --- Base URL for your backend API ---
+const API_BASE_URL = "http://127.0.0.1:8000"
 
-// Sample data for notifications
-const notifications = [
-  {
-    id: 1,
-    title: "DDoS Attack Detected",
-    description: "High volume of traffic from multiple IPs detected and blocked.",
-    time: "10 minutes ago",
-    severity: "high",
-  },
-  {
-    id: 2,
-    title: "IP Address Blocked",
-    description: "IP 192.168.1.45 has been automatically blocked due to suspicious activity.",
-    time: "25 minutes ago",
-    severity: "medium",
-  },
-  {
-    id: 3,
-    title: "System Update",
-    description: "ML model has been updated to the latest version.",
-    time: "1 hour ago",
-    severity: "low",
-  },
-  {
-    id: 4,
-    title: "New IP Flagged",
-    description: "IP 203.45.67.89 has been flagged for monitoring.",
-    time: "2 hours ago",
-    severity: "medium",
-  },
-]
+// --- NEW: Helper function to format timestamps into a "time ago" format ---
+const formatTimeAgo = (dateString) => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  const now = new Date();
+  const seconds = Math.round((now - date) / 1000);
+  
+  if (seconds < 60) return `${seconds} second${seconds !== 1 ? 's' : ''} ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days !== 1 ? 's' : ''} ago`;
+};
+
 
 export default function DashboardPage() {
   const [protectionEnabled, setProtectionEnabled] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  const handleRefresh = () => {
+  // --- State to hold data from the API ---
+  const [stats, setStats] = useState({
+    total_detected_attacks: 0,
+    blocked_ips: 0,
+    active_threats: 0,
+  })
+  const [trafficData, setTrafficData] = useState([])
+  const [attackDistribution, setAttackDistribution] = useState([])
+  const [notifications, setNotifications] = useState([])
+
+  // --- Function to fetch all dashboard data ---
+  const fetchData = useCallback(async () => {
     setIsRefreshing(true)
-    setTimeout(() => {
+    try {
+      // Fetch all data in parallel for better performance
+      const [statsRes, trafficRes, distributionRes, logsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/dashboard-stats`),
+        fetch(`${API_BASE_URL}/api/traffic-chart-data`),
+        fetch(`${API_BASE_URL}/api/attack-distribution-chart`),
+        fetch(`${API_BASE_URL}/api/attack-logs`), // This endpoint now returns unique logs
+      ])
+
+      // Parse JSON responses
+      const statsData = await statsRes.json()
+      const trafficData = await trafficRes.json()
+      const distributionData = await distributionRes.json()
+      const logsData = await logsRes.json()
+
+      // Update state
+      setStats(statsData)
+      setTrafficData(trafficData)
+      setAttackDistribution(distributionData)
+      
+      // --- CHANGE: Transform unique attack logs into the notification format ---
+      const formattedNotifications = logsData.map((log, index) => ({
+        id: log.id || index + 1,
+        title: `Attack from ${log.source_ip}`,
+        description: `Detected a ${log.details.type || 'high-volume'} attack. The IP has been blocked.`,
+        // --- CHANGE: Use the new formatTimeAgo function for a user-friendly display ---
+        time: formatTimeAgo(log.timestamp),
+        severity: "high",
+      }));
+      setNotifications(formattedNotifications)
+
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error)
+    } finally {
       setIsRefreshing(false)
-    }, 1500)
+    }
+  }, [])
+
+  // --- Fetch data on component mount and set up auto-refresh ---
+  useEffect(() => {
+    fetchData()
+    // --- NEW: Add a timer to automatically refresh data every 30 seconds ---
+    const interval = setInterval(fetchData, 30000);
+    // Cleanup the interval when the component unmounts to prevent memory leaks
+    return () => clearInterval(interval);
+  }, [fetchData])
+
+  const handleRefresh = () => {
+    fetchData()
   }
 
   return (
     <div className="space-y-6">
+      {/* Header and Stat Cards are now populated from the 'stats' state */}
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
@@ -106,8 +136,8 @@ export default function DashboardPage() {
             <ShieldAlert className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">750</div>
-            <p className="text-xs text-muted-foreground">+12% from last month</p>
+            <div className="text-2xl font-bold">{stats.total_detected_attacks}</div>
+            <p className="text-xs text-muted-foreground">Across all time</p>
           </CardContent>
         </Card>
         <Card>
@@ -116,8 +146,8 @@ export default function DashboardPage() {
             <ShieldCheck className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">128</div>
-            <p className="text-xs text-muted-foreground">+5 in the last 24 hours</p>
+            <div className="text-2xl font-bold">{stats.blocked_ips}</div>
+            <p className="text-xs text-muted-foreground">Total unique IPs blacklisted</p>
           </CardContent>
         </Card>
         <Card>
@@ -126,12 +156,13 @@ export default function DashboardPage() {
             <AlertCircle className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">3</div>
-            <p className="text-xs text-muted-foreground">-2 from yesterday</p>
+            <div className="text-2xl font-bold">{stats.active_threats}</div>
+            <p className="text-xs text-muted-foreground">In the last 5 minutes</p>
           </CardContent>
         </Card>
       </div>
 
+      {/* Charts are now populated from 'trafficData' and 'attackDistribution' states */}
       <Tabs defaultValue="traffic">
         <TabsList>
           <TabsTrigger value="traffic">Traffic Overview</TabsTrigger>
@@ -148,12 +179,7 @@ export default function DashboardPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart
                     data={trafficData}
-                    margin={{
-                      top: 10,
-                      right: 30,
-                      left: 0,
-                      bottom: 0,
-                    }}
+                    margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="time" />
@@ -165,7 +191,7 @@ export default function DashboardPage() {
                       stroke="#8884d8"
                       fill="#8884d8"
                       fillOpacity={0.3}
-                      name="Traffic (requests/min)"
+                      name="Simulated Total Traffic"
                     />
                     <Area
                       type="monotone"
@@ -185,24 +211,14 @@ export default function DashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle>Attack Distribution</CardTitle>
-              <CardDescription>Types of attacks detected in the last 7 days</CardDescription>
+              <CardDescription>Types of attacks detected across all time</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={[
-                      { name: "SYN Flood", value: 320 },
-                      { name: "UDP Flood", value: 210 },
-                      { name: "HTTP Flood", value: 170 },
-                      { name: "DNS Amplification", value: 50 },
-                    ]}
-                    margin={{
-                      top: 5,
-                      right: 30,
-                      left: 20,
-                      bottom: 5,
-                    }}
+                    data={attackDistribution}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
@@ -218,38 +234,31 @@ export default function DashboardPage() {
         </TabsContent>
       </Tabs>
 
+      {/* Notifications are now populated from the 'notifications' state */}
       <div className="space-y-4">
         <h2 className="text-xl font-bold">Recent Notifications</h2>
         <div className="space-y-4">
-          {notifications.map((notification) => (
-            <Alert
-              key={notification.id}
-              variant={
-                notification.severity === "high"
-                  ? "destructive"
-                  : notification.severity === "medium"
-                    ? "default"
-                    : "outline"
-              }
-            >
-              <div className="flex items-start">
-                {notification.severity === "high" ? (
+          {notifications.length > 0 ? (
+            notifications.map((notification) => (
+              <Alert
+                key={notification.id}
+                variant={"destructive"}
+              >
+                <div className="flex items-start">
                   <ShieldAlert className="h-4 w-4" />
-                ) : notification.severity === "medium" ? (
-                  <Shield className="h-4 w-4" />
-                ) : (
-                  <Clock className="h-4 w-4" />
-                )}
-                <div className="ml-4 flex-1">
-                  <AlertTitle className="flex items-center justify-between">
-                    {notification.title}
-                    <span className="text-xs font-normal text-muted-foreground">{notification.time}</span>
-                  </AlertTitle>
-                  <AlertDescription>{notification.description}</AlertDescription>
+                  <div className="ml-4 flex-1">
+                    <AlertTitle className="flex items-center justify-between">
+                      {notification.title}
+                      <span className="text-xs font-normal text-muted-foreground">{notification.time}</span>
+                    </AlertTitle>
+                    <AlertDescription>{notification.description}</AlertDescription>
+                  </div>
                 </div>
-              </div>
-            </Alert>
-          ))}
+              </Alert>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">No recent notifications.</p>
+          )}
         </div>
       </div>
     </div>

@@ -1,20 +1,16 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
-import Link from "next/link"
 import { Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useToast } from "@/components/ui/use-toast"
 
 export default function ForgotPasswordPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
-  const { toast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -24,10 +20,6 @@ export default function ForgotPasswordPage() {
     setTimeout(() => {
       setIsLoading(false)
       setIsSubmitted(true)
-      toast({
-        title: "Reset link sent",
-        description: "Check your email for the password reset link",
-      })
     }, 1500)
   }
 
@@ -57,9 +49,9 @@ export default function ForgotPasswordPage() {
               </Button>
               <p className="mt-4 text-center text-sm text-muted-foreground">
                 Remember your password?{" "}
-                <Link href="/login" className="text-primary hover:underline">
+                <a href="/login" className="text-primary hover:underline">
                   Back to login
-                </Link>
+                </a>
               </p>
             </CardFooter>
           </form>
@@ -71,7 +63,7 @@ export default function ForgotPasswordPage() {
               </p>
             </div>
             <Button asChild className="w-full mt-4">
-              <Link href="/login">Back to login</Link>
+              <a href="/login">Back to login</a>
             </Button>
           </CardContent>
         )}
