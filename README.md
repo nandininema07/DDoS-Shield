@@ -139,8 +139,8 @@ The model is balanced, robust, and ready for real-time DDoS detection across mul
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/ddos-detection-shield.git
-cd ddos-detection-shield
+git clone https://github.com/nandininema07/DDoS-Shield.git
+cd DDoS-Shield
 ```
 
 ### 2. Create the Environment File
@@ -202,6 +202,41 @@ Navigate back to the project root and run the training script. This will automat
 ```bash
 cd ..
 python train_model.py
+```
+
+### 6. Resetting the Database (for Testing)
+If you need to clear all logs and start fresh for testing, you can use the built-in reset endpoint or reset the Docker container.
+
+Option A: Using the API Endpoint (Recommended)
+Make sure your backend server is running, then run this command in a terminal:
+
+```bash
+curl -X POST [http://127.0.0.1:8000/api/reset-database](http://127.0.0.1:8000/api/reset-database)
+```
+
+Option B: Full Docker Reset
+This will completely delete the database container and all its data.
+```bash
+docker stop ddos-postgres
+docker rm ddos-postgres
+docker volume prune -f
+```
+
+After running these commands, you must re-run the setup steps from 4a to initialize a new database. The correct sequence is:
+
+(i) Start the new Docker container:
+```bash
+docker run --name ddos-postgres -e POSTGRES_USER=user -e POSTGRES_PASSWORD=password -e POSTGRES_DB=ddos_shield_db -p 5432:5432 -d postgres
+```
+
+(ii) Initialize the database by running your script. Make sure you're in the backend directory.
+```bash
+python init_db.py
+```
+
+(iii) Now, run your backend servers.
+```bash
+python run_backend.py
 ```
 
 ---
