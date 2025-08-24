@@ -1,12 +1,12 @@
 # Real-Time DDoS Detection and Mitigation Shield
 
-## 📜 Problem Statement
+## Problem Statement
 
 Distributed Denial of Service (DDoS) attacks are a critical threat to the availability of websites and online services. These attacks overwhelm a server with a flood of malicious traffic, rendering it inaccessible to legitimate users. Traditional signature-based detection systems often struggle with modern, sophisticated attacks and can be slow to respond. Furthermore, during legitimate high-traffic events (like flash sales or festivals), these systems can generate false alarms, leading to unnecessary alerts and potential disruption. There is a need for an intelligent, adaptive system that can accurately distinguish between legitimate traffic spikes and malicious DDoS attacks in real-time.
 
 ---
 
-## 💡 Solution Overview
+## Solution Overview
 
 This project implements an end-to-end, real-time DDoS detection and response system that leverages machine learning to analyze live network traffic. The system acts as a protective proxy, inspecting all incoming traffic, making intelligent predictions, and taking automated actions to mitigate threats.
 
@@ -38,7 +38,7 @@ The core architecture follows a modern data streaming pipeline:
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 * **Backend**: Python, FastAPI
 * **Machine Learning**: Scikit-learn, Pandas, NumPy
@@ -51,23 +51,23 @@ The core architecture follows a modern data streaming pipeline:
 
 ---
 
-## 🧠 Machine Learning Model
+## Machine Learning Model
 
 The detection engine uses a robust, production-grade machine learning pipeline designed for real-world DDoS detection. Here’s how it works:
 
-### 1. Data Loading and Preparation 🧺
+### 1. Data Loading and Preparation 
 
 - **Automatic Download:** The CICDDoS2019 dataset is downloaded from Kaggle using the `kagglehub` library.
 - **Multi-Attack Coverage:** Loads data from five different `.parquet` files (DNS, Syn, UDP, NTP, LDAP) to ensure the model learns to recognize a variety of DDoS attack types.
 - **Efficient Sampling:** Randomly samples 15,000 rows from each file and combines them into a single master dataset (total 75,000 samples) for fast, memory-efficient training.
 
-### 2. Data Cleaning and Preprocessing 🧼
+### 2. Data Cleaning and Preprocessing 
 
 - **Column Pruning:** Drops unnecessary columns (identifiers, timestamps) that don’t help the model.
 - **Error Handling:** Removes rows with mathematical errors (infinity, NaN).
 - **Label Encoding:** Converts text labels (e.g., "Benign", "DrDoS_DNS") into numeric codes for model compatibility.
 
-### 3. Feature Selection and Data Splitting 🎯
+### 3. Feature Selection and Data Splitting 
 
 - **Feature Selection:** Chooses 9 real-time-calculable features known to be strong DDoS indicators:
   - Fwd Packet Length Min
@@ -83,12 +83,12 @@ The detection engine uses a robust, production-grade machine learning pipeline d
   - **Training Set (80%)**: For model learning and balancing.
   - **Test Set (20%)**: For final, unbiased performance evaluation.
 
-### 4. Data Balancing ⚖️
+### 4. Data Balancing 
 
 - **Class Imbalance Detection:** Counts examples per attack type.
 - **Over-sampling (SMOTE):** Uses the SMOTE algorithm to synthesize new examples for rare attack types, ensuring balanced learning across all classes.
 
-### 5. Model Training and Evaluation 🏋️‍♂️
+### 5. Model Training and Evaluation
 
 - **Model Comparison:** Trains and compares six models: Random Forest, Gradient Boosting, SVM, Logistic Regression, K-Nearest Neighbors, and Naive Bayes.
 
@@ -105,7 +105,7 @@ The detection engine uses a robust, production-grade machine learning pipeline d
 - **Final Evaluation:** Reports accuracy, precision, recall, F1-score, and ROC-AUC on the test set.
 - **Feature Importance:** Analyzes which features contribute most to detection.
 
-### 📊 Latest Model Metrics
+### Latest Model Metrics
 
 - **Best Model:** Gradient Boosting Classifier
 - **Test Accuracy:** 95.37%
@@ -126,7 +126,7 @@ The model is balanced, robust, and ready for real-time DDoS detection across mul
 
 ---
 
-## ⚙️ Setup and Installation
+## Setup and Installation
 
 ### Prerequisites
 
@@ -241,7 +241,7 @@ python run_backend.py
 
 ---
 
-## 🚀 Running the Application
+## Running the Application
 
 The system consists of five main services that must be run in separate terminals.
 
