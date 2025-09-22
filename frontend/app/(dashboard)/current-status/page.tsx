@@ -18,25 +18,44 @@ export default function CurrentStatusPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   
   // --- State for API data ---
-  const [liveData, setLiveData] = useState([])
-  const [logData, setLogData] = useState([])
-  const [filteredLogs, setFilteredLogs] = useState([])
+  type LogDetails = {
+    type?: string;
+    total_packets?: number;
+    total_bytes?: number;
+    flow_duration?: number;
+  };
 
-  const [selectedLog, setSelectedLog] = useState(null)
+  type LogItem = {
+    id: number;
+    source_ip: string;
+    timestamp: string;
+    details: LogDetails;
+    _status?: "ddos detected" | "flagged" | "safe";
+  };
+
+  const [liveData, setLiveData] = useState<any[]>([])
+  const [logData, setLogData] = useState<LogItem[]>([])
+  const [filteredLogs, setFilteredLogs] = useState<LogItem[]>([])
+  const [blacklist, setBlacklist] = useState<string[]>([])
+
+  const [selectedLog, setSelectedLog] = useState<LogItem | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
   // --- Fetch data from the backend ---
   const fetchData = useCallback(async () => {
     try {
-      const [liveRes, logRes] = await Promise.all([
+      const [liveRes, logRes, blacklistRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/live-activity-chart`),
-        fetch(`${API_BASE_URL}/api/traffic-log`) // Fetch all logs initially
+        fetch(`${API_BASE_URL}/api/traffic-log`),
+        fetch(`${API_BASE_URL}/api/blacklist`)
       ]);
       const liveData = await liveRes.json();
       const logData = await logRes.json();
-      
+      const blacklistData = await blacklistRes.json();
+
       setLiveData(liveData);
       setLogData(logData);
+      setBlacklist(blacklistData.map(item => item.ip_address));
       setFilteredLogs(logData); // Initially, show all logs
     } catch (error) {
       console.error("Failed to fetch current status data:", error);
@@ -57,17 +76,22 @@ export default function CurrentStatusPage() {
       logs = logs.filter(log => log.source_ip.toLowerCase().includes(searchQuery.toLowerCase()));
     }
 
-    if (statusFilter !== "all") {
-      // Since we only have "DDoS Detected" logs, this simplifies the filter.
-      if (statusFilter === "ddos detected") {
-        logs = logs.filter(log => log.details.type); // Check if it's an attack log
+    // Determine status for each log
+    logs = logs.map(log => {
+      if (blacklist.includes(log.source_ip)) {
+        return { ...log, _status: "ddos detected" };
       } else {
-        logs = []; // No logs for "Safe" or "Flagged" yet
+        // You can add logic here to flag suspicious IPs
+        return { ...log, _status: "safe" };
       }
+    });
+
+    if (statusFilter !== "all") {
+      logs = logs.filter(log => log._status === statusFilter);
     }
-    
+
     setFilteredLogs(logs);
-  }, [searchQuery, statusFilter, logData]);
+  }, [searchQuery, statusFilter, logData, blacklist]);
 
 
   const handleViewDetails = (log) => {
@@ -138,8 +162,8 @@ export default function CurrentStatusPage() {
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="ddos detected">DDoS Detected</SelectItem>
-                <SelectItem value="flagged">Flagged (Not Implemented)</SelectItem>
-                <SelectItem value="safe">Safe (Not Implemented)</SelectItem>
+                <SelectItem value="flagged">Flagged</SelectItem>
+                <SelectItem value="safe">Safe</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -158,16 +182,38 @@ export default function CurrentStatusPage() {
             </TableHeader>
             <TableBody>
               {filteredLogs.length > 0 ? (
-                filteredLogs.map((log) => (
+                filteredLogs.map((log: LogItem) => (
                   <TableRow key={log.id}>
                     <TableCell className="font-mono">{log.source_ip}</TableCell>
-                    <TableCell>{new Date(log.timestamp).toLocaleDateString()}</TableCell>
-                    <TableCell>{new Date(log.timestamp).toLocaleTimeString()}</TableCell>
+                    <TableCell>{(() => {
+                      const date = new Date(log.timestamp);
+                      const istOffsetMs = 5.5 * 60 * 60 * 1000;
+                      const istDate = new Date(date.getTime() + istOffsetMs);
+                      return istDate.toLocaleDateString("en-IN");
+                    })()}</TableCell>
+                    <TableCell>{(() => {
+                      const date = new Date(log.timestamp);
+                      const istOffsetMs = 5.5 * 60 * 60 * 1000;
+                      const istDate = new Date(date.getTime() + istOffsetMs);
+                      return istDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
+                    })()}</TableCell>
                     <TableCell>
-                      <Badge variant="destructive">
-                        <ShieldAlert className="mr-1 h-3 w-3" />
-                        DDoS Detected
-                      </Badge>
+                      {log._status === "ddos detected" ? (
+                        <Badge variant="destructive">
+                          <ShieldAlert className="mr-1 h-3 w-3" />
+                          DDoS Detected
+                        </Badge>
+                      ) : log._status === "flagged" ? (
+                        <Badge variant="secondary">
+                          <AlertCircle className="mr-1 h-3 w-3" />
+                          Flagged
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">
+                          <Check className="mr-1 h-3 w-3" />
+                          Safe
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="sm" onClick={() => handleViewDetails(log)}>
@@ -199,7 +245,13 @@ export default function CurrentStatusPage() {
             <div className="space-y-4">
               <div className="flex justify-between rounded-lg bg-muted p-3">
                 <div className="font-medium">Status</div>
-                <Badge variant="destructive">DDoS Detected</Badge>
+                {selectedLog._status === "ddos detected" ? (
+                  <Badge variant="destructive">DDoS Detected</Badge>
+                ) : selectedLog._status === "flagged" ? (
+                  <Badge variant="secondary">Flagged</Badge>
+                ) : (
+                  <Badge variant="outline">Safe</Badge>
+                )}
               </div>
               <div className="space-y-2">
                 <div className="text-sm font-medium">ML Model Analysis</div>
