@@ -25,13 +25,80 @@ const formatTimeAgo = (dateString) => {
   return `${days} days ago`;
 };
 
+// Map known attack types to a short one-line description the operator can read at-a-glance
+type AttackInfo = { title: string; description: string }
+const attackInfoMap: Record<string, AttackInfo> = {
+  // common labels seen in logs
+  "SYN-FLOOD": {
+    title: "SYN Flood",
+    description: "High rate of TCP SYN packets aiming to exhaust the server's connection table.",
+  },
+  "UDP-FLOOD": {
+    title: "UDP Flood",
+    description: "Large volume of UDP packets intended to saturate the target's network bandwidth.",
+  },
+  "HTTP-FLOOD": {
+    title: "HTTP Flood",
+    description: "Many HTTP requests (often with low resource cost) designed to overwhelm the web server.",
+  },
+  "ICMP-FLOOD": {
+    title: "ICMP Flood",
+    description: "Continuous ICMP echo (ping) requests used to flood the target's network stack.",
+  },
+  "DNS-AMPLIFICATION": {
+    title: "DNS Amplification",
+    description: "Reflection/amplification attack using misconfigured DNS resolvers to multiply traffic.",
+  },
+  // DrDoS and other vendor/model labels seen in logs
+  "DRDOS-UDP": {
+    title: "DrDoS (UDP)",
+    description: "Distributed reflected UDP-based DoS (DrDoS) using UDP amplification or floods.",
+  },
+  "DRDOS-DNS": {
+    title: "DrDoS (DNS)",
+    description: "DrDoS variant leveraging DNS reflection/amplification to generate large reply traffic.",
+  },
+  "DRDOS-HTTP": {
+    title: "DrDoS (HTTP)",
+    description: "Application-layer HTTP flood variant observed across multiple sources.",
+  },
+  "DDOS-UDP": {
+    title: "DDoS (UDP)",
+    description: "General UDP flood (multiple sources sending UDP packets to overwhelm resource).",
+  },
+  "DDOS-DNS": {
+    title: "DDoS (DNS)",
+    description: "DDoS using DNS reflection/amplification techniques.",
+  },
+  // generic fallback
+  "DEFAULT": {
+    title: "Network Attack",
+    description: "Suspicious traffic pattern detected — further investigation recommended.",
+  }
+}
+
+const getAttackInfo = (type?: string): AttackInfo => {
+  if (!type) return attackInfoMap["DEFAULT"];
+  // normalize: uppercase, replace spaces/underscores and non-alphanumerics with hyphens
+  const normalized = String(type).toUpperCase().replace(/[^A-Z0-9]+/g, '-');
+  return attackInfoMap[normalized] || attackInfoMap["DEFAULT"];
+}
 export default function NotificationsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
   
   // --- State for API data ---
-  const [notificationsData, setNotificationsData] = useState([])
-  const [filteredNotifications, setFilteredNotifications] = useState([])
+  type NotificationItem = {
+    id: number;
+    timestamp: string;
+    source_ip: string;
+    details?: { type?: string; [key: string]: any };
+    email_status?: string;
+    call_status?: string;
+  }
+
+  const [notificationsData, setNotificationsData] = useState<NotificationItem[]>([])
+  const [filteredNotifications, setFilteredNotifications] = useState<NotificationItem[]>([])
 
   // --- Fetch data from the backend ---
   const fetchNotifications = useCallback(async () => {
@@ -56,14 +123,14 @@ export default function NotificationsPage() {
     let data = notificationsData;
 
     if (searchQuery) {
-        data = data.filter(notification =>
-            notification.source_ip.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            notification.details.type?.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+      data = data.filter(notification =>
+        notification.source_ip.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        notification.details?.type?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
     }
 
     if (activeTab === "blocked") {
-        data = data.filter(n => n.details.type); // Filter for actual attacks
+      data = data.filter(n => n.details?.type); // Filter for actual attacks
     } else if (activeTab === "call-failed") {
         data = data.filter(n => n.call_status === "failed");
     }
@@ -117,7 +184,8 @@ export default function NotificationsPage() {
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-2">
                         <ShieldAlert className="h-5 w-5 text-destructive" />
-                        <h3 className="font-medium">Attack Detected: {notification.details.type}</h3>
+                        <h3 className="font-medium">Attack Detected: {notification.details?.type || 'Unknown'}</h3>
+                        <div className="text-sm text-muted-foreground">{getAttackInfo(notification.details?.type).description}</div>
                       </div>
                       <span className="text-xs text-muted-foreground">{formatTimeAgo(notification.timestamp)}</span>
                     </div>

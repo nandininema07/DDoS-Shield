@@ -15,7 +15,7 @@ else:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         # --- CHANGE HERE: Updated to a current and valid model name ---
-        llm = genai.GenerativeModel('gemini-1.5-flash')
+        llm = genai.GenerativeModel('gemini-2.5-flash')
         print("✅ CHATBOT_SERVICE: Gemini client configured successfully.")
     except Exception as e:
         print(f"❌ CHATBOT_SERVICE: Error configuring Gemini client: {e}")
